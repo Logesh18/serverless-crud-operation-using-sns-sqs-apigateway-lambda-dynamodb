@@ -1,0 +1,225 @@
+Resources:
+  UsersProfileS3Bucket:
+    Type: AWS::S3::Bucket
+    Properties:
+      BucketName: usersprofiles3bucket
+      PublicAccessBlockConfiguration:
+        BlockPublicAcls: false
+        IgnorePublicAcls: false
+        BlockPublicPolicy: false
+        RestrictPublicBuckets: false
+
+  UsersProfileS3BucketPolicy:
+    Type: AWS::S3::BucketPolicy
+    Properties:
+      Bucket: !Ref UsersProfileS3Bucket
+      PolicyDocument:
+        Statement:
+          - Effect: Allow
+            Principal: "*"
+            Action:
+              - s3:GetBucketAcl
+              - s3:PutBucketAcl
+              - s3:GetBucketPolicy
+              - s3:PutBucketPolicy
+              - s3:GetObject
+              - s3:PutObject
+              - s3:ListBucket
+              - s3:DeleteObject
+            Resource: 
+              - Fn::Sub: arn:aws:s3:::${UsersProfileS3Bucket}/*
+              - Fn::Sub: arn:aws:s3:::${UsersProfileS3Bucket}
+
+  UserCreationSNSTopic:
+    Type: AWS::SNS::Topic
+    Properties:
+      DisplayName: UserCreationSNSTopic
+
+  UsersCreationSQSQueue:
+    Type: AWS::SQS::Queue
+    Properties:
+      QueueName: UsersCreationSQSQueue
+
+  UsersCreationSQSQueuePolicy:
+    Type: AWS::SQS::QueuePolicy
+    Properties:
+      PolicyDocument:
+        Id: UsersCreationSQSQueuePolicy
+        Version: '2012-10-17'
+        Statement:
+          - Effect: Allow
+            Principal:
+              Service: sns.amazonaws.com
+            Action: sqs:SendMessage
+            Resource: !GetAtt UsersCreationSQSQueue.Arn
+      Queues:
+        - !Ref UsersCreationSQSQueue
+
+  UserCreationSNSTopicSubscription:
+    Type: AWS::SNS::Subscription
+    DependsOn:
+      - UserCreationSNSTopic
+      - UsersCreationSQSQueue
+    Properties:
+      Protocol: sqs
+      TopicArn: !Ref UserCreationSNSTopic
+      Endpoint: !GetAtt UsersCreationSQSQueue.Arn
+
+  UsersTable:
+    Type: AWS::DynamoDB::Table
+    Properties:
+      TableName: users
+      AttributeDefinitions:
+        - AttributeName: Id
+          AttributeType: S
+      KeySchema:
+        - AttributeName: Id
+          KeyType: HASH
+      ProvisionedThroughput:
+        ReadCapacityUnits: 5
+        WriteCapacityUnits: 5
+
+  processSQSMessageRole:
+    Type: AWS::IAM::Role
+    Properties:
+      RoleName: processSQSMessageRole
+      AssumeRolePolicyDocument:
+        Version: "2012-10-17"
+        Statement:
+          - Effect: Allow
+            Principal:
+              Service:
+                - lambda.amazonaws.com
+            Action:
+              - sts:AssumeRole
+      Policies:
+        - PolicyName: processSQSPolicy
+          PolicyDocument:
+            Version: "2012-10-17"
+            Statement:
+              - Effect: Allow
+                Action:
+                  - sqs:ReceiveMessage
+                  - sqs:DeleteMessage
+                  - sqs:GetQueueAttributes
+                  - dynamodb:PutItem
+                Resource:
+                  - !GetAtt UsersCreationSQSQueue.Arn
+                  - !GetAtt UsersTable.Arn
+
+  getUserByIdRole:
+    Type: AWS::IAM::Role
+    Properties:
+      RoleName: getUserByIdRole
+      AssumeRolePolicyDocument:
+        Version: "2012-10-17"
+        Statement:
+          - Effect: Allow
+            Principal:
+              Service:
+                - lambda.amazonaws.com
+            Action:
+              - sts:AssumeRole
+      Policies:
+        - PolicyName: getUserByIdRolePolicy
+          PolicyDocument:
+            Version: "2012-10-17"
+            Statement:
+              - Effect: Allow
+                Action:
+                  - dynamodb:GetItem
+                Resource:
+                  - !GetAtt UsersTable.Arn
+
+  getAllUsersRole:
+    Type: AWS::IAM::Role
+    Properties:
+      RoleName: getAllUsersRole
+      AssumeRolePolicyDocument:
+        Version: "2012-10-17"
+        Statement:
+          - Effect: Allow
+            Principal:
+              Service:
+                - lambda.amazonaws.com
+            Action:
+              - sts:AssumeRole
+      Policies:
+        - PolicyName: getAllUsersRolePolicy
+          PolicyDocument:
+            Version: "2012-10-17"
+            Statement:
+              - Effect: Allow
+                Action:
+                  - dynamodb:Scan
+                Resource:
+                  - !GetAtt UsersTable.Arn
+
+  UpdateUserRole:
+    Type: AWS::IAM::Role
+    Properties:
+      RoleName: UpdateUserRole
+      AssumeRolePolicyDocument:
+        Version: "2012-10-17"
+        Statement:
+          - Effect: Allow
+            Principal:
+              Service:
+                - lambda.amazonaws.com
+            Action:
+              - sts:AssumeRole
+      Policies:
+        - PolicyName: UpdateUserRolePolicy
+          PolicyDocument:
+            Version: "2012-10-17"
+            Statement:
+              - Effect: Allow
+                Action:
+                  - dynamodb:UpdateItem
+                Resource:
+                  - !GetAtt UsersTable.Arn
+
+  DeleteUserRole:
+    Type: AWS::IAM::Role
+    Properties:
+      RoleName: DeleteUserRole
+      AssumeRolePolicyDocument:
+        Version: "2012-10-17"
+        Statement:
+          - Effect: Allow
+            Principal:
+              Service:
+                - lambda.amazonaws.com
+            Action:
+              - sts:AssumeRole
+      Policies:
+        - PolicyName: DeleteUserRolePolicy
+          PolicyDocument:
+            Version: "2012-10-17"
+            Statement:
+              - Effect: Allow
+                Action:
+                  - dynamodb:DeleteItem
+                  - dynamodb:GetItem
+                Resource:
+                  - !GetAtt UsersTable.Arn
+  
+  CloudWatchLogsPolicy:
+    Type: AWS::IAM::Policy
+    Properties:
+      PolicyName: CloudWatchLogsPolicy
+      Roles:
+        - !Ref processSQSMessageRole
+        - !Ref getAllUsersRole
+        - !Ref UpdateUserRole
+        - !Ref DeleteUserRole
+        - !Ref getUserByIdRole
+      PolicyDocument:
+        Version: "2012-10-17"
+        Statement:
+          - Effect: Allow
+            Action:
+              - logs:CreateLogGroup
+              - logs:CreateLogStream
+              - logs:PutLogEvents
+            Resource: '*'

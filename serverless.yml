@@ -1,0 +1,76 @@
+service: user-creation-service
+
+frameworkVersion: '3'
+
+package:
+  individually: true
+
+provider:
+  name: aws
+  runtime: nodejs18.x
+  stage: dev
+  region: us-east-1
+  iam:
+    role:
+      statements:
+        - Effect: Allow
+          Action:
+            - sns:Publish
+            - sns:Subscribe
+          Resource: !Ref UserCreationSNSTopic
+        - Effect: Allow
+          Action:
+            - dynamodb:PutItem
+            - dynamodb:Scan
+            - dynamodb:GetItem
+            - dynamodb:PutItem
+            - dynamodb:UpdateItem
+            - dynamodb:DeleteItem
+          Resource: !GetAtt UsersTable.Arn
+        - Effect: Allow
+          Action:
+            - sqs:SendMessage
+            - sqs:GetQueueAttributes
+            - sqs:ReceiveMessage
+          Resource: !GetAtt UsersCreationSQSQueue.Arn
+        - Effect: Allow
+          Action:
+            - s3:CreateBucket
+            - s3:GetBucketAcl
+            - s3:PutBucketAcl
+            - s3:GetBucketPolicy
+            - s3:PutBucketPolicy
+            - s3:GetObject
+            - s3:PutObject
+            - s3:ListBucket
+            - s3:DeleteObject
+          Resource: !Sub arn:aws:s3:::${UsersProfileS3Bucket}
+
+        - Effect: Allow
+          Action:
+            - logs:CreateLogGroup
+            - logs:CreateLogStream
+            - logs:PutLogEvents
+            - s3:CreateBucket
+            - s3:ListAllMyBuckets
+            - s3:ListBucket
+            - s3:GetBucketLocation
+          Resource: '*'
+
+functions: ${file(config/lambda.yml)}
+
+resources: ${file(config/resources.yml)}
+
+plugins:
+  - serverless-plugin-typescript
+  - serverless-prune-plugin
+  - serverless-plugin-common-excludes
+
+custom:
+  commonExcludes:
+    - README.md
+    - .gitignore
+    - .editorconfig
+    - .npmignore
+    - .git/**
+    - node_modules/**

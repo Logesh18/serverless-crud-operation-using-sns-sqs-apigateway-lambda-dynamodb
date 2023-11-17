@@ -1,0 +1,97 @@
+publishToSNS:
+  handler: src/handlers/createUser/publishToSNSLambda.handler
+  environment:
+    SNS_TOPIC_ARN: !Ref UserCreationSNSTopic
+    S3_BUCKET: !Ref UsersProfileS3Bucket
+  events:
+    - http:
+        path: user/create
+        method: post
+        cors: true
+
+processSQSMessage:
+  handler: src/handlers/createUser/processSQSMessageLambda.handler
+  role: 
+    Fn::GetAtt:
+      - processSQSMessageRole
+      - Arn
+  environment:
+    DYNAMODB_TABLE_NAME: !Ref UsersTable
+  events:
+    - sqs:
+        arn:
+          Fn::GetAtt:
+            - UsersCreationSQSQueue
+            - Arn
+        batchSize: 5
+  package:
+    patterns:
+      - '!node_modules/**'
+
+getUserById:
+  handler: src/handlers/getUserById/getUserByIdLambda.handler
+  role: 
+    Fn::GetAtt:
+      - getUserByIdRole
+      - Arn
+  environment:
+    DYNAMODB_TABLE_NAME: !Ref UsersTable
+  events:
+    - http:
+        path: user/getUserById/{userId}
+        method: get
+        cors: true
+  package:
+    patterns:
+      - '!node_modules/**'
+
+getAllUsers:
+  handler: src/handlers/getAllUsers/getAllUsersLambda.handler
+  role: 
+    Fn::GetAtt:
+      - getAllUsersRole
+      - Arn
+  environment:
+    DYNAMODB_TABLE_NAME: !Ref UsersTable
+  events:
+    - http:
+        path: user/getAllUsers
+        method: get
+        cors: true
+  package:
+    patterns:
+      - '!node_modules/**'
+
+updateUser:
+  handler: src/handlers/updateUser/updateUserLambda.handler
+  role: 
+    Fn::GetAtt:
+      - UpdateUserRole
+      - Arn
+  environment:
+    DYNAMODB_TABLE_NAME: !Ref UsersTable
+  events:
+    - http:
+        path: user/updateUser/{userId}
+        method: put
+        cors: true
+  package:
+    patterns:
+      - '!node_modules/**'
+
+deleteUser:
+  handler: src/handlers/deleteUser/deleteUserLambda.handler
+  role: 
+    Fn::GetAtt:
+      - DeleteUserRole
+      - Arn
+  environment:
+    DYNAMODB_TABLE_NAME: !Ref UsersTable
+  events:
+    - http:
+        path: user/deleteUser/{userId}
+        method: delete
+        cors: true
+  package:
+    patterns:
+      - '!node_modules/**'
